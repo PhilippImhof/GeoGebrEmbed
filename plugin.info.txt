@@ -1,0 +1,7 @@
+base   geogebrembed
+author Philipp Imhof
+email  dev@imhof.cc
+date   2021-10-10
+name   GeoGebrEmbed
+desc   Embed GeoGebra applets into DokuWiki
+url    https://www.dokuwiki.org/plugin:geogebrembed
