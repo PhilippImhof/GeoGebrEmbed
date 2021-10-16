@@ -92,7 +92,7 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
                     $params_raw = preg_replace($regex, '', $params_raw);
                 }
             }
-            // add HTML parameters to the corresponding array
+            // store HTML parameters 
             $this->html_params = implode(', ', $html_params);
             
             // split params at whitespace
@@ -111,7 +111,7 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
                 }
             }
 
-            // add parameter string to the params array
+            // store parameter string 
             $this->params = implode(', ', str_replace('=', ': ', $params));
             return array($state, array('html_params' => $this->html_params, 'params' => $this->params));
             
@@ -137,39 +137,14 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
             return array($state, array('html_params' => $this->html_params, 'params' => $this->params));
 
         case DOKU_LEXER_EXIT :
-            return array($state, array('html_params' => $this->html_params, 'params' => $this->params));
-
-        default:
-            return array();
-        }
-    }
-
-    /** @inheritDoc */
-    public function render($mode, Doku_Renderer $renderer, $data) {
-        if ($mode !== 'xhtml') {
-            return false;
-        }
-
-        if ($data[0] == DOKU_LEXER_ENTER) {
-            // starting new GeoGebra applet
-
-            // for first invocation: import deployment script and reset counter to zero
-            if (!$this->import_done) {
-                $url = $this->getConf('config_url');
-                $renderer->doc .= "<script src=\"$url\" async></script>";
-                $this->count = 0;
-                $this->import_done = true;
+            // load configuration, if needed
+            if (!$this->configloaded) {
+                $this->loadConfig();
             }
 
-            $renderer->doc .= "<div id=\"ggb-$this->count\" {$data[1]['html_params']}></div>";
-            return true;
-        } 
-
-        if ($data[0] == DOKU_LEXER_EXIT) {
             // find unset parameters that have a pre-configured default value
-            global $conf;
-            $default_settings = str_replace('default_', '', array_keys($conf['plugin']['geogebrembed']));
-            $current_settings = $data[1]['params'];
+            $default_settings = str_replace('default_', '', array_keys($this->conf));
+            $current_settings = $this->params;
             foreach ($default_settings as $s) {
                 // if the parameter is already set or if its name contains an underscore: discard it
                 if (strstr($current_settings, $s) or strstr($s, '_')) continue;
@@ -178,7 +153,7 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
                 if ($s == "height" and strstr($current_settings, 'autoHeight')) continue;
 
                 $current_settings .= ", $s: ";
-                $val = $this->getConf("default_$s");
+                $val = $this->conf["default_$s"];
                 switch (gettype($val)) {
                 case "string":
                     $current_settings .= '"'.$val.'"';
@@ -196,13 +171,37 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
                 }
             }
 
-            $current_settings = trim($current_settings, ' ,');
-            // end of current GeoGebra applet: inject applet into the corresponding div
+            $this->params = trim($current_settings, ' ,');
+            return array($state, array('html_params' => $this->html_params, 'params' => $this->params));
+
+        default:
+            return array();
+        }
+    }
+
+    /** @inheritDoc */
+    public function render($mode, Doku_Renderer $renderer, $data) {
+        if ($mode !== 'xhtml') {
+            return false;
+        }
+
+        // for first invocation: import deployment script and reset counter to zero
+        if (!$this->import_done) {
+            $url = $this->getConf('config_url');
+            $renderer->doc .= "<script src=\"$url\" async></script>";
+            $this->import_done = true;
+            $this->count = 0;
+            return true;
+        } 
+
+        // end of current GeoGebra applet: add div and inject applet
+        if ($data[0] === DOKU_LEXER_EXIT) {
             $renderer->doc .= <<<GGB
+<div id="ggb-$this->count" {$data[1]['html_params']}></div>
 <script> 
    window.addEventListener('load', () => {
       let import_$this->count = new GGBApplet({
-         $current_settings
+         {$data[1]['params']}
       }, true);
       import_$this->count.inject("ggb-$this->count");
    });
