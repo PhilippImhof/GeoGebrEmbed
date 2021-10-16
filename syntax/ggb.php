@@ -13,12 +13,12 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
     private $count = 0;
 
     // each applet gets its own set of parameters
-    private $params = array();
+    private $params = '';
 
     // each applet can have custom HTML attributes
     // currently, only the class attribute is supported.
     // style will not work, because it is overwritten by GeoGebra's script upon injection
-    private $html_params = array();
+    private $html_params = '';
     
     /** @inheritDoc */
     public function getType() {
@@ -93,7 +93,7 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
                 }
             }
             // add HTML parameters to the corresponding array
-            $this->html_params[] = implode(', ', $html_params);
+            $this->html_params = implode(', ', $html_params);
             
             // split params at whitespace
             $params = preg_split('/\s/', substr($params_raw, 4, -1), -1, PREG_SPLIT_NO_EMPTY);
@@ -112,33 +112,32 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
             }
 
             // add parameter string to the params array
-            $this->params[] = implode(', ', str_replace('=', ': ', $params));
-            return array($state, '');
+            $this->params = implode(', ', str_replace('=', ': ', $params));
+            return array($state, array('html_params' => $this->html_params, 'params' => $this->params));
             
         case DOKU_LEXER_UNMATCHED :
             if (substr($match, 0, 2) == '{{') {
                 $path = ml(preg_replace('/^\{\{([^|]+).*\}\}$/', '\1', $match));
-                $this->params[$this->count] .= ", filename: \"$path\"";
+                $this->params .= ", filename: \"$path\"";
             }
             // force interpretation as GeoGebra material ID
             else if (substr($match, 0, 3) == 'id:') {
                 $material_id = substr($match, 3);
-                $this->params[$this->count] .= ", material_id: \"$material_id\"";
+                $this->params .= ", material_id: \"$material_id\"";
             }
             else if (preg_match('/^[A-Z0-9]{0,'.$this->getConf('config_threshold').'}$/i', $match)) {
                 $material_id = $match;
-                $this->params[$this->count] .= ", material_id: \"$material_id\"";
+                $this->params .= ", material_id: \"$material_id\"";
             }
             else {
                 if (base64_decode($match, true)) {
-                    $this->params[$this->count] .= ", ggbBase64: \"$match\"";
+                    $this->params .= ", ggbBase64: \"$match\"";
                 }
             }
-            return array($state, '');
+            return array($state, array('html_params' => $this->html_params, 'params' => $this->params));
 
         case DOKU_LEXER_EXIT :
-            $this->count++;
-            return array($state, '');
+            return array($state, array('html_params' => $this->html_params, 'params' => $this->params));
 
         default:
             return array();
@@ -162,7 +161,7 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
                 $this->import_done = true;
             }
 
-            $renderer->doc .= "<div id=\"ggb-$this->count\" {$this->html_params[$this->count]}></div>";
+            $renderer->doc .= "<div id=\"ggb-$this->count\" {$data[1]['html_params']}></div>";
             return true;
         } 
 
@@ -170,7 +169,7 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
             // find unset parameters that have a pre-configured default value
             global $conf;
             $default_settings = str_replace('default_', '', array_keys($conf['plugin']['geogebrembed']));
-            $current_settings = $this->params[$this->count];
+            $current_settings = $data[1]['params'];
             foreach ($default_settings as $s) {
                 // if the parameter is already set or if its name contains an underscore: discard it
                 if (strstr($current_settings, $s) or strstr($s, '_')) continue;
