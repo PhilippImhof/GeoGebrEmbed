@@ -152,6 +152,10 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
                 // do not set height if autoHeight is set to true
                 if ($s == "height" and strstr($current_settings, 'autoHeight')) continue;
 
+                // do not set width and height, if scaleContainerClass is used
+                if ($s == "width" and strstr($current_settings, 'scaleContainerClass')) continue;
+                if ($s == "height" and strstr($current_settings, 'scaleContainerClass')) continue;
+
                 $current_settings .= ", $s: ";
                 $val = $this->conf["default_$s"];
                 switch (gettype($val)) {
