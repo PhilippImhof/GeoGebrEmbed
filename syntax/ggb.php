@@ -37,7 +37,7 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
 
     /** @inheritDoc */
     public function connectTo($mode) {
-        $this->Lexer->addEntryPattern('<ggb.*?>(?=.*?</ggb>)', $mode, 'plugin_geogebrembed_ggb');
+        $this->Lexer->addEntryPattern('<ggb(?!ref|caption).*?>(?=.*?</ggb>)', $mode, 'plugin_geogebrembed_ggb');
     }
 
     /** @inheritDoc */
