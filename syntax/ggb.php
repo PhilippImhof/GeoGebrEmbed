@@ -15,10 +15,11 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
     // each applet gets its own set of parameters
     private $params = '';
 
-    // each applet can have custom HTML attributes
-    // currently, only the class attribute is supported.
-    // style will not work, because it is overwritten by GeoGebra's script upon injection
-    private $html_params = '';
+    // track whether we have already imported GeoGebra's deployggb.js
+    private $center = '';
+
+    // each applet can have custom additional CSS classes 
+    private $css_classes = '';
     
     /** @inheritDoc */
     public function getType() {
@@ -37,7 +38,7 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
 
     /** @inheritDoc */
     public function connectTo($mode) {
-        $this->Lexer->addEntryPattern('<ggb(?!ref|caption).*?>(?=.*?</ggb>)', $mode, 'plugin_geogebrembed_ggb');
+        $this->Lexer->addEntryPattern('< ?ggb(?!ref|caption).*?>(?=.*?</ggb>)', $mode, 'plugin_geogebrembed_ggb');
     }
 
     /** @inheritDoc */
@@ -49,6 +50,15 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
     public function handle($match, $state, $pos, Doku_Handler $handler) {
         switch ($state) {
         case DOKU_LEXER_ENTER :
+            // check whether the applet should be centered
+            if (substr($match, 0, 2) == '< ') {
+                $this->center = 'center';
+                $match = str_replace('< ggb', '<ggb', $match);
+            }
+            else {
+                $this->center = '';
+            }
+
             // replace short form parameters by their official syntax
             $substitutions = array(
                 '/\bfsb\b/' => 'showFullscreenButton=true',
@@ -80,21 +90,16 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
             );
             $params_raw = preg_replace(array_keys($substitutions), array_values($substitutions), $match);
 
-            // search for optional HTML attributes
-            // Note: style attribute is not supported, because GeoGebra's script will overwrite it
-            $attrs = ['class'];
-            $html_params = array();
-            foreach ($attrs as $a) {
-                $regex = '/' . $a . '=(["\'])[^\1]+?\1/';
-                $content = array();
-                if (preg_match($regex, $params_raw, $content)) {
-                    $html_params[] = $content[0];
-                    $params_raw = preg_replace($regex, '', $params_raw);
-                }
+            // search for optional CSS classes
+            $regex = '/class=(["\'])([^\1]+?)\1/';
+            if (preg_match($regex, $params_raw, $content)) {
+                $this->css_classes = $content[2];
+                $params_raw = preg_replace($regex, '', $params_raw);
             }
-            // store HTML parameters 
-            $this->html_params = implode(', ', $html_params);
-            
+            else {
+                $this->css_classes = '';
+            }
+
             // split params at whitespace
             $params = preg_split('/\s/', substr($params_raw, 4, -1), -1, PREG_SPLIT_NO_EMPTY);
 
@@ -113,7 +118,8 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
 
             // store parameter string 
             $this->params = implode(', ', str_replace('=', ': ', $params));
-            return array($state, array('html_params' => $this->html_params, 'params' => $this->params));
+            return array($state, array('center' => $this->center,
+                                       'css_classes' => $this->css_classes, 'params' => $this->params));
             
         case DOKU_LEXER_UNMATCHED :
             if (substr($match, 0, 2) == '{{') {
@@ -134,7 +140,8 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
                     $this->params .= ", ggbBase64: \"$match\"";
                 }
             }
-            return array($state, array('html_params' => $this->html_params, 'params' => $this->params));
+            return array($state, array('center' => $this->center,
+                                       'css_classes' => $this->css_classes, 'params' => $this->params));
 
         case DOKU_LEXER_EXIT :
             // load configuration, if needed
@@ -176,7 +183,8 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
             }
 
             $this->params = trim($current_settings, ' ,');
-            return array($state, array('html_params' => $this->html_params, 'params' => $this->params));
+            return array($state, array('center' => $this->center,
+                                       'css_classes' => $this->css_classes, 'params' => $this->params));
 
         default:
             return array();
@@ -201,7 +209,9 @@ class syntax_plugin_geogebrembed_ggb extends \dokuwiki\Extension\SyntaxPlugin {
         // end of current GeoGebra applet: add div and inject applet
         if ($data[0] === DOKU_LEXER_EXIT) {
             $renderer->doc .= <<<GGB
-<div id="ggb-$this->count" {$data[1]['html_params']}></div>
+<div class="geogebrembed-wrapper {$data[1]['center']}">
+<div id="ggb-$this->count" class="geogebrembed {$data[1]['css_classes']}"></div>
+</div>
 <script> 
    window.addEventListener('load', () => {
       let import_$this->count = new GGBApplet({
