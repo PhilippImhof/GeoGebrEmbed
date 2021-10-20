@@ -1,9 +1,11 @@
 div.geogebrembed-wrapper {
     display: table;
+    margin-bottom: 10px;
 }
 
 div.geogebrembed-wrapper.center {
     margin: auto;
+    margin-bottom: 10px;
 }
 
 div.geogebrembed {
